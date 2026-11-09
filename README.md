@@ -102,7 +102,7 @@ Para recriar o modelo do zero, use `powerbi/consultas_power_query.pq` (consultas
 
 ## Como rodar o dashboard Streamlit
 
-🔗 🔗 **App publicado:** [amazon-fase4-fiap.streamlit.app](https://amazon-fase4-fiap.streamlit.app)
+🔗 **App publicado:** [amazon-fase4-fiap.streamlit.app](https://amazon-fase4-fiap.streamlit.app)
 
 ```bash
 git clone <url-do-repositorio>
