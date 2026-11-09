@@ -8,7 +8,7 @@ Tech Challenge · Fase 4 · POSTECH/FIAP. Análise de 1.351 produtos do *Amazon 
 | Dashboard Power BI (11 páginas) | `powerbi/Tech_Challenge_Amazon_Fiap_Fase_4.pbix` |
 | Medidas DAX (medidas, colunas e tabelas calculadas) | `powerbi/medidas.dax` |
 | Consultas do Power Query (M) | `powerbi/consultas_power_query.pq` |
-| Dashboard online (Streamlit, mesmas 11 páginas) | `streamlit_app/.(https://amazon-fase4-fiap.streamlit.app)|
+| | Dashboard online (Streamlit, mesmas 11 páginas) | [Abrir o app](https://amazon-fase4-fiap.streamlit.app) · código em `streamlit_app/` |
 | Relatório executivo (Google Docs) | [Abrir o relatório](https://docs.google.com/document/d/1nJ6-IzIBC5tEF3M564fA08emyZh-X_lt-B6tJHeiHjE/edit?usp=sharing) |
 | Apresentação (Google Slides) | [Abrir os slides](https://docs.google.com/presentation/d/1Utp5Bee0UqbSHt3OzNIuMrp_cH8OD9uVWmhEA0f41BQ/edit?usp=sharing) |
 | Vídeo executivo (YouTube) | [Assistir ao vídeo](https://www.youtube.com/watch?v=pTv3qIHMpzY) |
@@ -102,7 +102,7 @@ Para recriar o modelo do zero, use `powerbi/consultas_power_query.pq` (consultas
 
 ## Como rodar o dashboard Streamlit
 
-🔗 **App publicado:** _adicionar link (`https://amazon-fase4-fiap.streamlit.app`)_
+🔗 🔗 **App publicado:** [amazon-fase4-fiap.streamlit.app](https://amazon-fase4-fiap.streamlit.app)
 
 ```bash
 git clone <url-do-repositorio>
