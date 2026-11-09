@@ -1,0 +1,10 @@
+# Tema do app: tons de cinza do dashboard do Power BI.
+# O degradê do fundo da página é aplicado em streamlit_app/utils.py (aplicar_estilo).
+[theme]
+base = "light"
+primaryColor = "#3B6FB6"
+backgroundColor = "#E4E5E7"          # fundo das tabelas e das áreas sem degradê
+secondaryBackgroundColor = "#D3D5D8" # campos de filtro e caixas de seleção
+textColor = "#1F2228"
+dataframeHeaderBackgroundColor = "#C8CACD"
+dataframeBorderColor = "#B3B6BA"

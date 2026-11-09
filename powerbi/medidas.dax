@@ -1,0 +1,528 @@
+// =============================================================================
+// Medidas DAX do dashboard "Amazon Product Performance & Customer Insights"
+// Tech Challenge - Fase 4 (POSTECH/FIAP)
+//
+// Origem: modelo do arquivo powerbi/Tech_Challenge_Amazon_Fiap_Fase_4.pbix
+// Conteúdo: 28 medidas (tabela Medidas), 11 colunas calculadas e 3 tabelas calculadas.
+//
+// Como usar: no Power BI Desktop, use "Nova medida" (ou "Nova coluna" / "Nova tabela")
+// e cole a expressão que vem depois do sinal de igual, com o nome indicado.
+// O modelo usa as tabelas: produtos_tratados (fonte: data/tratados/amazon_tratado.csv),
+// palavras_grupos, palavras_por_categoria, temas_grupos, Linhas, Top20_Preco_Real_Baixa e Top20_Preco_Real_Alta.
+// =============================================================================
+
+// #############################################################################
+// PARTE 1 - MEDIDAS (tabela Medidas)
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// INDICADORES GERAIS (cartões da Visão Executiva)
+// -----------------------------------------------------------------------------
+
+// Quantidade de produtos únicos (1.351).
+Total Produtos =
+    DISTINCTCOUNT (produtos_tratados[product_id] )
+
+// Quantidade de categorias principais (9).
+Total Categorias =
+    DISTINCTCOUNT ( produtos_tratados[cat_principal] )
+
+// Soma das avaliações contando uma vez cada combinação de nota e número de avaliações (18,2 milhões).
+Total Avaliações =
+    SUMX (
+        SUMMARIZE ( produtos_tratados, produtos_tratados[rating], produtos_tratados[rating_count] ),
+        produtos_tratados[rating_count]
+    )
+
+// Média simples das notas por produto (4,09).
+Rating Médio =
+    AVERAGE ( produtos_tratados[rating] )
+
+// Média das notas ponderada pelo número de avaliações (4,16).
+Rating Ponderado =
+    DIVIDE (
+        SUMX ( produtos_tratados, produtos_tratados[rating] * produtos_tratados[rating_count] ),
+        SUMX (
+            FILTER ( produtos_tratados, NOT ISBLANK ( produtos_tratados[rating] ) ),
+            produtos_tratados[rating_count]
+        )
+    )
+
+// Parcela dos produtos com nota abaixo de 4, entre os que têm nota (25,2%). Exclui produtos sem nota.
+% Produtos Nota < 4 =
+    DIVIDE (
+        CALCULATE (
+            [Total Produtos],
+            produtos_tratados[rating] < 4,
+            NOT ISBLANK ( produtos_tratados[rating] )
+        ),
+        CALCULATE ( [Total Produtos], NOT ISBLANK ( produtos_tratados[rating] ) )
+    )
+
+// -----------------------------------------------------------------------------
+// PREÇO E DESCONTO (página Preços e Estratégia Comercial)
+// -----------------------------------------------------------------------------
+
+// Média do percentual de desconto (46,7%).
+Desconto Médio % =
+    AVERAGE ( produtos_tratados[discount_pct] )
+
+// Valor médio economizado por produto (₹2.385,78).
+Economia Média por Produto =
+    AVERAGE (produtos_tratados[discount_value_inr])
+
+// Preço médio já com desconto (₹3.304,73).
+Preco_medio_com_desconto =
+    AVERAGE ( produtos_tratados[discounted_price_inr])
+
+// Parcela dos produtos com desconto de 50% ou mais (49%).
+Produtos_Desconto_Maior_50 =
+    DIVIDE(
+        CALCULATE(
+            [Total Produtos],
+            produtos_tratados[discount_pct] >= 0.5
+        ),
+        [Total Produtos]
+    )
+
+// Correlação de Pearson entre desconto e nota (-0,16).
+Correlação Desconto x Rating =
+    VAR T = FILTER ( produtos_tratados, NOT ISBLANK ( produtos_tratados[rating] ) )
+    VAR n = COUNTROWS ( T )
+    VAR sx = SUMX ( T, produtos_tratados[discount_pct] )
+    VAR sy = SUMX ( T, produtos_tratados[rating] )
+    VAR sxy = SUMX ( T, produtos_tratados[discount_pct] * produtos_tratados[rating] )
+    VAR sx2 = SUMX ( T, produtos_tratados[discount_pct] ^ 2 )
+    VAR sy2 = SUMX ( T, produtos_tratados[rating] ^ 2 )
+    RETURN
+        DIVIDE ( n * sxy - sx * sy, SQRT ( ( n * sx2 - sx ^ 2 ) * ( n * sy2 - sy ^ 2 ) ) )
+
+// -----------------------------------------------------------------------------
+// SEGMENTAÇÃO DE PRODUTOS (página Oportunidades & Recomendações)
+// -----------------------------------------------------------------------------
+
+// Alto engajamento e nota abaixo de 4,0 (49 produtos).
+Produtos em Risco =
+    CALCULATE ( [Total Produtos], produtos_tratados[quadrante2] = "Alto engajamento, baixa nota" )
+
+// Alto engajamento e nota de 4,3 ou mais (112 produtos).
+Estrelas =
+    CALCULATE ( [Total Produtos], produtos_tratados[quadrante2]= "Estrela" )
+
+// Baixo engajamento e nota de 4,3 ou mais (81 produtos).
+Joias Escondidas =
+    CALCULATE ( [Total Produtos], produtos_tratados[quadrante2] = "Joia escondida" )
+
+// -----------------------------------------------------------------------------
+// AVALIAÇÕES POR GRUPO DE NOTA (página Avaliações X Notas)
+// -----------------------------------------------------------------------------
+
+// Participação no total de avaliações de todo o portfólio.
+% Avaliações da Categoria =
+    DIVIDE (
+        [Total Avaliações],
+        CALCULATE ( [Total Avaliações], ALL ( produtos_tratados ) ))
+
+// Avaliações de produtos com nota abaixo de 4,0, por agrupamento da tabela Linhas.
+Avaliações_Baixa =
+    VAR _linha = SELECTEDVALUE ( Linhas[Ordem] )
+    VAR _cats =
+        ADDCOLUMNS (
+            ALL ( produtos_tratados[cat_principal] ),
+            "@av", [Total Avaliações]
+        )
+    VAR _rank =
+        ADDCOLUMNS (
+            _cats,
+            "@rank", RANKX ( _cats, [@av], , DESC, DENSE )
+        )
+    VAR _sel =
+        FILTER (
+            _rank,
+            SWITCH (
+                _linha,
+                1, TRUE (),
+                2, [@rank] <= 3,
+                3, [@rank] = 1,
+                4, [@rank] = 2,
+                5, [@rank] = 3,
+                FALSE ()
+            )
+        )
+    RETURN
+        CALCULATE (
+            SUMX (
+                FILTER (
+                    produtos_tratados,
+                    produtos_tratados[Flag Listagem] = 1
+                        && NOT ISBLANK ( produtos_tratados[rating] )
+                        && NOT ISBLANK ( produtos_tratados[rating_count] )
+                        && produtos_tratados[rating] < 4
+                ),
+                produtos_tratados[rating_count]
+            ),
+            TREATAS (
+                SELECTCOLUMNS ( _sel, "c", [cat_principal] ),
+                produtos_tratados[cat_principal]
+            )
+        )
+
+// Avaliações de produtos com nota de 4,0 a menos de 4,3, por agrupamento da tabela Linhas.
+Avaliações_Média =
+    VAR _linha = SELECTEDVALUE ( Linhas[Ordem] )
+    VAR _cats =
+        ADDCOLUMNS (
+            ALL ( produtos_tratados[cat_principal] ),
+            "@av", [Total Avaliações]
+        )
+    VAR _rank =
+        ADDCOLUMNS (
+            _cats,
+            "@rank", RANKX ( _cats, [@av], , DESC, DENSE )
+        )
+    VAR _sel =
+        FILTER (
+            _rank,
+            SWITCH (
+                _linha,
+                1, TRUE (),
+                2, [@rank] <= 3,
+                3, [@rank] = 1,
+                4, [@rank] = 2,
+                5, [@rank] = 3,
+                FALSE ()
+            )
+        )
+    RETURN
+        CALCULATE (
+            SUMX (
+                FILTER (
+                    produtos_tratados,
+                    produtos_tratados[Flag Listagem] = 1
+                        && NOT ISBLANK ( produtos_tratados[rating] )
+                        && NOT ISBLANK ( produtos_tratados[rating_count] )
+                        && produtos_tratados[rating] >= 4
+                        && produtos_tratados[rating] < 4.3
+                ),
+                produtos_tratados[rating_count]
+            ),
+            TREATAS (
+                SELECTCOLUMNS ( _sel, "c", [cat_principal] ),
+                produtos_tratados[cat_principal]
+            )
+        )
+
+// Avaliações de produtos com nota de 4,3 ou mais, por agrupamento da tabela Linhas.
+Avaliações_Alta =
+    VAR _linha = SELECTEDVALUE ( Linhas[Ordem] )
+    VAR _cats =
+        ADDCOLUMNS (
+            ALL ( produtos_tratados[cat_principal] ),
+            "@av", [Total Avaliações]
+        )
+    VAR _rank =
+        ADDCOLUMNS (
+            _cats,
+            "@rank", RANKX ( _cats, [@av], , DESC, DENSE )
+        )
+    VAR _sel =
+        FILTER (
+            _rank,
+            SWITCH (
+                _linha,
+                1, TRUE (),
+                2, [@rank] <= 3,
+                3, [@rank] = 1,
+                4, [@rank] = 2,
+                5, [@rank] = 3,
+                FALSE ()
+            )
+        )
+    RETURN
+        CALCULATE (
+            SUMX (
+                FILTER (
+                    produtos_tratados,
+                    produtos_tratados[Flag Listagem] = 1
+                        && NOT ISBLANK ( produtos_tratados[rating] )
+                        && NOT ISBLANK ( produtos_tratados[rating_count] )
+                        && produtos_tratados[rating] >= 4.3
+                ),
+                produtos_tratados[rating_count]
+            ),
+            TREATAS (
+                SELECTCOLUMNS ( _sel, "c", [cat_principal] ),
+                produtos_tratados[cat_principal]
+            )
+        )
+
+// -----------------------------------------------------------------------------
+// CUSTOMER INSIGHTS (páginas Customer Insights e Avaliação X Temas)
+// -----------------------------------------------------------------------------
+
+// Quanto a palavra é mais citada entre mal avaliados do que entre bem avaliados, em pontos percentuais.
+Dif mal vs bem (pp) =
+    ( SUM ( palavras_grupos[%_mal_avaliados] ) - SUM ( palavras_grupos[%_bem_avaliados] ) ) * 100
+
+// O mesmo cálculo com o sinal invertido.
+Dif bem vs mal (pp) =
+    - [Dif mal vs bem (pp)]
+
+// Diferença mal vs bem por categoria, em pontos percentuais.
+Dif categoria (pp) =
+    ( SUM ( palavras_por_categoria[pct_mal] ) - SUM ( palavras_por_categoria[pct_bem] ) ) * 100
+
+// Cor da barra: vermelho para mal avaliados, azul para bem avaliados.
+Cor Dif Categoria =
+    IF ( [Dif categoria (pp)] > 0, "#B3392F", "#3B6FB6")
+
+// -----------------------------------------------------------------------------
+// ENGAJAMENTO × SATISFAÇÃO (página Engajamento × Satisfação)
+// -----------------------------------------------------------------------------
+
+// Menor fatia de produtos (os mais avaliados) que soma 80% das avaliações (22,6%).
+% Produtos p/ 80% das Avaliações =
+    VAR tab =
+        ADDCOLUMNS (
+            FILTER ( produtos_tratados, NOT ISBLANK ( produtos_tratados[rating_count] ) ),
+            "@av", produtos_tratados[rating_count]
+        )
+    VAR total = SUMX ( tab, [@av] )
+    VAR acum =
+        ADDCOLUMNS ( tab, "@acum", VAR a = [@av] RETURN SUMX ( FILTER ( tab, [@av] >= a ), [@av] ) )
+    RETURN
+        DIVIDE ( COUNTROWS ( FILTER ( acum, [@acum] <= 0.8 * total ) ), COUNTROWS ( tab ) )
+
+// Parcela das avaliações que está em cada quadrante. Base de "% Avaliações nas Estrelas" e "% Avaliações nas Joias".
+% Avaliações do Quadrante =
+    DIVIDE (
+        [Total Avaliações],
+        CALCULATE ( [Total Avaliações], REMOVEFILTERS ( produtos_tratados[quadrante2] ) )
+    )
+
+// Parcela das avaliações nos produtos Estrela (25,3%).
+% Avaliações nas Estrelas =
+    CALCULATE ( [% Avaliações do Quadrante], produtos_tratados[quadrante2] = "Estrela" )
+
+// Parcela das avaliações nas Joias escondidas (0,2%).
+% Avaliações nas Joias =
+    CALCULATE ( [% Avaliações do Quadrante], produtos_tratados[quadrante2] = "Joia escondida" )
+
+// Avaliações em produtos de alto engajamento e nota abaixo de 4,0 (2,0 milhões).
+Avaliações em Risco =
+    CALCULATE ( [Total Avaliações], produtos_tratados[quadrante2] = "Alto engajamento, baixa nota" )
+
+// -----------------------------------------------------------------------------
+// FICHA DO PRODUTO (dica do gráfico de dispersão de Engajamento × Satisfação)
+// -----------------------------------------------------------------------------
+
+// Nome do produto selecionado.
+Ficha - Produto =
+    SELECTEDVALUE ( produtos_tratados[product_name], "Selecione um produto (botão direito > Drill-through > Ficha do Produto)" )
+
+// #############################################################################
+// PARTE 2 - COLUNAS CALCULADAS
+// #############################################################################
+
+// Classifica cada produto pelos quartis de avaliações (P75 = alto engajamento, P25 = baixo) e pela nota.
+produtos_tratados[quadrante2] =
+    VAR P75 =
+        PERCENTILEX.INC(
+            ALL(produtos_tratados),
+            produtos_tratados[rating_count],
+            0.75
+        )
+    VAR P25 =
+        PERCENTILEX.INC(
+            ALL(produtos_tratados),
+            produtos_tratados[rating_count],
+            0.25
+        )
+    VAR Avaliacoes = produtos_tratados[rating_count]
+    VAR Nota = produtos_tratados[rating]
+    RETURN
+        SWITCH(
+            TRUE(),
+            ISBLANK(Nota) || ISBLANK(Avaliacoes), "Sem dados",
+            Avaliacoes >= P75 && Nota < 4, "Alto engajamento, baixa nota",
+            Avaliacoes >= P75 && Nota >= 4.3, "Estrela",
+            Avaliacoes <= P25 && Nota >= 4.3, "Joia escondida",
+            "Demais"
+        )
+
+// Bem avaliados (>= 4,3), mal avaliados (< 4,0) e intermediários.
+produtos_tratados[Grupo de Nota] =
+    SWITCH (
+        TRUE (),
+        ISBLANK ( produtos_tratados[rating] ), "Sem nota",
+        produtos_tratados[rating] >= 4.3, "Bem avaliados (>=4,3)",
+        produtos_tratados[rating] < 4.0, "Mal avaliados (<4,0)",
+        "Intermediários"
+    )
+
+// Marca com 1 uma linha por combinação de nota e número de avaliações, para não contar variantes (cores) duas vezes.
+produtos_tratados[Flag Listagem] =
+    IF (
+        produtos_tratados[product_id] =
+            CALCULATE (
+                MIN ( produtos_tratados[product_id] ),
+                ALLEXCEPT ( produtos_tratados, produtos_tratados[rating], produtos_tratados[rating_count] )
+            ),
+        1, 0
+    )
+
+// Mantém as 3 maiores categorias e agrupa as demais em "Outras".
+produtos_tratados[cat_grupo] =
+    IF ( produtos_tratados[cat_principal] IN { "Electronics", "Computers&Accessories", "Home&Kitchen" },
+         produtos_tratados[cat_principal], "Outras" )
+
+// Corta o nome do produto em 45 caracteres para caber nos gráficos.
+produtos_tratados[nome_curto] =
+    IF ( LEN ( produtos_tratados[product_name] ) > 45,
+         LEFT ( produtos_tratados[product_name], 45 ) & "...", produtos_tratados[product_name] )
+
+// Diferença de frequência da palavra (mal - bem), em pontos percentuais.
+palavras_grupos[Dif mal vs bem pp] =
+    ( palavras_grupos[%_mal_avaliados] - palavras_grupos[%_bem_avaliados] ) * 100
+
+// Mesma diferença com o sinal invertido.
+palavras_grupos[Dif bem vs mal pp] =
+    -1 * [Dif mal vs bem pp]
+
+// Diferença de frequência da palavra por categoria (mal - bem), em pontos percentuais.
+palavras_por_categoria[Dif pp categoria] =
+    ( palavras_por_categoria[pct_mal] - palavras_por_categoria[pct_bem] ) * 100
+
+// Valor absoluto da diferença por categoria.
+palavras_por_categoria[Dif abs] =
+    ABS ( palavras_por_categoria[Dif pp categoria] )
+
+// Rating bayesiano: puxa a nota de quem tem poucas avaliações para a média do portfólio. Não é usada em nenhum visual.
+produtos_tratados[Rating Ajustado] =
+    VAR m = PERCENTILEX.INC ( ALL ( produtos_tratados ), produtos_tratados[rating_count], 0.25 )
+    VAR C =
+        DIVIDE (
+            SUMX ( ALL ( produtos_tratados ), produtos_tratados[rating] * produtos_tratados[rating_count] ),
+            SUMX ( FILTER ( ALL ( produtos_tratados ), NOT ISBLANK ( produtos_tratados[rating] ) ), produtos_tratados[rating_count] )
+        )
+    VAR R = produtos_tratados[rating]
+    VAR v = produtos_tratados[rating_count]
+    RETURN
+        IF ( NOT ISBLANK ( R ) && v > 0, DIVIDE ( v * R + m * C, v + m ) )
+
+// Classificação de 1 a 5 estrelas por quintil do Rating Ajustado (20% dos produtos em cada faixa). Não é usada em nenhum visual.
+produtos_tratados[Estrelas Ranking] =
+    VAR r = produtos_tratados[Rating Ajustado]
+    VAR base = FILTER ( ALL ( produtos_tratados ), NOT ISBLANK ( produtos_tratados[Rating Ajustado] ) )
+    VAR p20 = PERCENTILEX.INC ( base, produtos_tratados[Rating Ajustado], 0.2 )
+    VAR p40 = PERCENTILEX.INC ( base, produtos_tratados[Rating Ajustado], 0.4 )
+    VAR p60 = PERCENTILEX.INC ( base, produtos_tratados[Rating Ajustado], 0.6 )
+    VAR p80 = PERCENTILEX.INC ( base, produtos_tratados[Rating Ajustado], 0.8 )
+    RETURN
+        SWITCH (
+            TRUE (),
+            ISBLANK ( r ), BLANK (),
+            r >= p80, 5,
+            r >= p60, 4,
+            r >= p40, 3,
+            r >= p20, 2,
+            1
+        )
+
+// #############################################################################
+// PARTE 3 - TABELAS CALCULADAS
+// #############################################################################
+
+// Define os cinco agrupamentos usados na página Avaliações X Notas.
+Linhas =
+    DATATABLE (
+        "Linha", STRING,
+        "Ordem", INTEGER,
+        {
+            { "Todos os produtos", 1 },
+            { "Top 3 categorias (juntas)", 2 },
+            { "Top 1 categoria", 3 },
+            { "Top 2 categoria", 4 },
+            { "Top 3 categoria", 5 }
+        }
+    )
+
+// Os 20 produtos de maior preço real com nota abaixo de 4 (página Prod. Notas < 4).
+Top20_Preco_Real_Baixa =
+    VAR _top =
+        TOPN (
+            20,
+            FILTER (
+                produtos_tratados,
+                produtos_tratados[rating] < 4
+                    && produtos_tratados[Flag Listagem] = 1
+                    && NOT ISBLANK ( produtos_tratados[rating_count] )
+            ),
+            produtos_tratados[actual_price_inr], DESC,
+            produtos_tratados[product_id], ASC
+        )
+    VAR _base =
+        SELECTCOLUMNS (
+            _top,
+            "id", produtos_tratados[product_id],
+            "Preço real (₹)", produtos_tratados[actual_price_inr],
+            "Número de Avaliações", produtos_tratados[rating_count]
+        )
+    VAR _rank =
+        ADDCOLUMNS (
+            _base,
+            "Posição",
+                VAR _p = [Preço real (₹)]
+                VAR _i = [id]
+                RETURN
+                    COUNTROWS (
+                        FILTER ( _base, [Preço real (₹)] > _p || ( [Preço real (₹)] = _p && [id] <= _i ) )
+                    )
+        )
+    RETURN
+        SELECTCOLUMNS (
+            _rank,
+            "Posição", [Posição],
+            "Preço real (₹)", [Preço real (₹)],
+            "Número de Avaliações", [Número de Avaliações]
+        )
+
+// Os 20 produtos de maior preço real com nota de 4,3 ou mais (página Prod. Notas ≥ 4,3).
+Top20_Preco_Real_Alta =
+    VAR _top =
+        TOPN (
+            20,
+            FILTER (
+                produtos_tratados,
+                produtos_tratados[rating] >= 4.3
+                    && produtos_tratados[Flag Listagem] = 1
+                    && NOT ISBLANK ( produtos_tratados[rating_count] )
+            ),
+            produtos_tratados[actual_price_inr], DESC,
+            produtos_tratados[product_id], ASC
+        )
+    VAR _base =
+        SELECTCOLUMNS (
+            _top,
+            "id", produtos_tratados[product_id],
+            "Preço real (₹)", produtos_tratados[actual_price_inr],
+            "Número de Avaliações", produtos_tratados[rating_count]
+        )
+    VAR _rank =
+        ADDCOLUMNS (
+            _base,
+            "Posição",
+                VAR _p = [Preço real (₹)]
+                VAR _i = [id]
+                RETURN
+                    COUNTROWS (
+                        FILTER ( _base, [Preço real (₹)] > _p || ( [Preço real (₹)] = _p && [id] <= _i ) )
+                    )
+        )
+    RETURN
+        SELECTCOLUMNS (
+            _rank,
+            "Posição", [Posição],
+            "Preço real (₹)", [Preço real (₹)],
+            "Número de Avaliações", [Número de Avaliações]
+        )

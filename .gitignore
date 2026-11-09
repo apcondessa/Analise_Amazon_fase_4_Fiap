@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Streamlit (segredos locais nunca sobem para o GitHub)
+.streamlit/secrets.toml
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Arquivos temporários do Office/OneDrive
+~$*
+*.tmp
+
+# Power BI: arquivos temporários (o .pbix final continua versionado)
+*.pbix.bak
+*.pbi_tmp
