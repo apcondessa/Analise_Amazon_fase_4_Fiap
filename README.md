@@ -145,8 +145,7 @@ Python (pandas, numpy, plotly), Streamlit, Power BI (DAX e Power Query), Google 
 
 ## Equipe
 
-_**Ana Paula Machado Condessa - rm373492**_  
-_**Jhennifer Aparecida Oliveira Freitas - rm370853**_  
+_**Ana Paula Machado Condessa - rm373492**_   
 _**Lucas Henrique da Silva Cruz - rm374131**_  
 _**Pedro Paulo Goes Alves - rm370771**_  
 _**João Vicente da Rosa da Silveira - rm372552**_
